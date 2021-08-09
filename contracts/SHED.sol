@@ -202,6 +202,18 @@ contract SHED is Context, IERC20, Ownable {
     return true;
   }
 
+  function deliver(uint256 tAmount) external {
+    address sender = _msgSender();
+    require(
+      !_isExcluded[sender],
+      'Excluded addresses cannot call this function'
+    );
+    (uint256 rAmount, , , , , ) = _getValues(tAmount);
+    _rOwned[sender] = _rOwned[sender].sub(rAmount);
+    _rTotal = _rTotal.sub(rAmount);
+    _tFeeTotal = _tFeeTotal.add(tAmount);
+  }
+
   function isExcludedFromReward(address account) external view returns (bool) {
     return _isExcluded[account];
   }
