@@ -47,7 +47,12 @@ contract SHED is Context, IERC20, Ownable {
   uint256 private _previousBurnFee = _burnFee;
 
   uint256 private _maxPriceImpPerc = 2;
-  uint256 launchTime;
+
+  uint256 private _maxBuyPercent = 1;
+  uint256 private _maxBuySeconds = 2 * 60 * 60; // 2 hours in seconds after launch
+  bool public overrideMaxBuy = false;
+
+  uint256 public launchTime;
 
   IUniswapV2Router02 public uniswapV2Router;
   address public uniswapV2Pair;
@@ -97,6 +102,10 @@ contract SHED is Context, IERC20, Ownable {
     _burnFee = _previousBurnFee;
     tradingOpen = true;
     launchTime = block.timestamp;
+  }
+
+  function closeTrading() external onlyOwner {
+    tradingOpen = false;
   }
 
   function name() public view returns (string memory) {
@@ -165,7 +174,7 @@ contract SHED is Context, IERC20, Ownable {
   }
 
   function increaseAllowance(address spender, uint256 addedValue)
-    public
+    external
     virtual
     returns (bool)
   {
@@ -178,7 +187,7 @@ contract SHED is Context, IERC20, Ownable {
   }
 
   function decreaseAllowance(address spender, uint256 subtractedValue)
-    public
+    external
     virtual
     returns (bool)
   {
@@ -193,24 +202,20 @@ contract SHED is Context, IERC20, Ownable {
     return true;
   }
 
-  function isExcludedFromReward(address account) public view returns (bool) {
+  function isExcludedFromReward(address account) external view returns (bool) {
     return _isExcluded[account];
   }
 
-  function totalFees() public view returns (uint256) {
+  function totalFees() external view returns (uint256) {
     return _tFeeTotal;
   }
 
-  function deliver(uint256 tAmount) public {
-    address sender = _msgSender();
-    require(
-      !_isExcluded[sender],
-      'Excluded addresses cannot call this function'
-    );
-    (uint256 rAmount, , , , , ) = _getValues(tAmount);
-    _rOwned[sender] = _rOwned[sender].sub(rAmount);
-    _rTotal = _rTotal.sub(rAmount);
-    _tFeeTotal = _tFeeTotal.add(tAmount);
+  function isEnforcingMaxBuy() public view returns (bool) {
+    return !overrideMaxBuy && block.timestamp <= launchTime.add(_maxBuySeconds);
+  }
+
+  function overrideMaxRestriction(bool canBuyAnyAmount) external {
+    overrideMaxBuy = canBuyAnyAmount;
   }
 
   function reflectionFromToken(uint256 tAmount, bool deductTransferFee)
@@ -287,17 +292,24 @@ contract SHED is Context, IERC20, Ownable {
     ) {
       require(tradingOpen, 'Trading not yet enabled.');
 
-      //antibot
+      // antibot
       if (block.timestamp == launchTime) {
         _isSniper[to] = true;
         _confirmedSnipers.push(to);
+      }
+
+      // check max buy restriction after launch
+      if (isEnforcingMaxBuy()) {
+        require(
+          amount <= balanceOf(uniswapV2Pair).mul(_maxBuyPercent).div(100),
+          'you have exceeded the maximum you can buy immediately after launch'
+        );
       }
     }
 
     uint256 contractTokenBalance = balanceOf(address(this));
 
     //sell
-
     if (!inSwapAndLiquify && tradingOpen && to == uniswapV2Pair) {
       if (contractTokenBalance > 0) {
         if (
