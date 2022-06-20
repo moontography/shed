@@ -54,7 +54,7 @@ contract SHEDSwap is Ownable {
     view
     returns (uint256)
   {
-    return (_shedBalance * 10**18) / (shedPerBnb * shed.decimals());
+    return (_shedBalance * 10**18) / (shedPerBnb * 10**shed.decimals());
   }
 
   function getMetisToReimburse(uint256 _shedBalance)
@@ -62,7 +62,9 @@ contract SHEDSwap is Ownable {
     view
     returns (uint256)
   {
-    return (_shedBalance * metis.decimals()) / (shedPerMetis * shed.decimals());
+    return
+      (_shedBalance * 10**metis.decimals()) /
+      (shedPerMetis * 10**shed.decimals());
   }
 
   function getShed() external view returns (address) {
